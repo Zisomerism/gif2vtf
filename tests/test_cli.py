@@ -6,13 +6,13 @@ from srctools.vtf import VTF, VTFFlags
 from gif2vtf.cli import main
 
 
-def _write_gif(path, frame_colors, size=(100, 100)):
+def _write_gif(path, frame_colors, size=(100, 100), duration=100):
     frames = [Image.new("RGB", size, color) for color in frame_colors]
     frames[0].save(
         path,
         save_all=True,
         append_images=frames[1:],
-        duration=100,
+        duration=duration,
         loop=0,
     )
 
@@ -51,6 +51,44 @@ def test_cli_spray_preset_applies_flags(tmp_path):
     assert VTFFlags.CLAMP_S in parsed.flags
     assert VTFFlags.CLAMP_T in parsed.flags
     assert VTFFlags.POINT_SAMPLE in parsed.flags
+
+
+def test_cli_decimate_halves_frames(tmp_path):
+    gif = tmp_path / "anim.gif"
+    out = tmp_path / "anim.vtf"
+    # 6 distinct frames; --decimate 2 should keep 3 (drops frames 2, 4, 6).
+    _write_gif(gif, [(i * 30, 0, 0) for i in range(6)])
+
+    rc = main([str(gif), "-o", str(out), "--format", "RGBA8888", "--decimate", "2"])
+    assert rc == 0
+
+    parsed = VTF.read(io.BytesIO(out.read_bytes()))
+    assert parsed.frame_count == 3
+
+
+def test_cli_optimize_frames_removes_duplicates(tmp_path, capsys):
+    gif = tmp_path / "dup.gif"
+    out = tmp_path / "dup.vtf"
+    # Two identical leading frames, then a distinct one.
+    _write_gif(gif, [(10, 20, 30), (10, 20, 30), (200, 100, 50)])
+
+    rc = main([str(gif), "-o", str(out), "--format", "RGBA8888", "--optimize-frames"])
+    assert rc == 0
+
+    parsed = VTF.read(io.BytesIO(out.read_bytes()))
+    assert parsed.frame_count == 2
+    assert "experimental" in capsys.readouterr().err
+
+
+def test_cli_optimize_fuzz_requires_optimize_frames(tmp_path, capsys):
+    gif = tmp_path / "f.gif"
+    out = tmp_path / "f.vtf"
+    _write_gif(gif, [(0, 0, 0), (255, 255, 255)])
+
+    rc = main([str(gif), "-o", str(out), "--format", "RGBA8888", "--optimize-fuzz", "5"])
+    assert rc == 1
+    assert not out.exists()
+    assert "--optimize-fuzz requires --optimize-frames" in capsys.readouterr().err
 
 
 def test_cli_strict_size_fails_when_over_limit(tmp_path, capsys):

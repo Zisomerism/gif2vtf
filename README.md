@@ -70,10 +70,22 @@ A preset only supplies defaults; any explicit flag overrides it.
 
 --max-frames N           Keep at most N frames
 --skip N                 Skip the first N frames
+--decimate N             Drop every Nth frame (1-based); N must be >= 2
+--optimize-frames        EXPERIMENTAL: remove duplicate and zero-delay frames
+--optimize-fuzz N        Max per-channel RGBA difference for duplicate detection
 --version 7.5            VTF version (7.2-7.5)
 --strict-size            Fail instead of warning when over the spray limit
 -v / --verbose           Print conversion details
 ```
+
+### Reducing frame count
+
+Sprays have a tight size budget, so trimming frames is often necessary.
+
+- `--decimate N` drops every Nth frame using 1-based counting. `--decimate 2` on a 10-frame GIF removes frames 2, 4, 6, 8, 10 and keeps 5; `--decimate 4` removes every 4th frame and keeps roughly three quarters.
+- `--optimize-frames` is experimental. It removes whole frames that add nothing to the visible animation: zero-delay intermediate frames and runs of consecutive identical frames (the spirit of ImageMagick's [`RemoveZero` and `RemoveDups`](https://usage.imagemagick.org/anim_opt/#frame_opt) layer methods). Duplicate detection is exact by default; raise the tolerance with `--optimize-fuzz N`, where `N` is the maximum allowed per-channel difference. This does not perform GIF sub-frame or disposal optimization, which is irrelevant to VTF because every VTF frame stores a full image.
+
+Optimization runs before decimation, and both run after `--skip` / `--max-frames`.
 
 Supported format names: `DXT1`, `DXT3`, `DXT5`, `DXT1_ONEBITALPHA`, `BGR888`, `RGB888`, `BGRA8888`, `RGBA8888`, `BGR565`, `RGB565`, `ATI2N`.
 

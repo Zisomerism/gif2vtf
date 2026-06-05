@@ -10,7 +10,8 @@ from typing import Optional, Sequence
 from srctools.vtf import VTFFlags
 
 from gif2vtf import formats, presets
-from gif2vtf.gif_loader import load_gif_frames
+from gif2vtf.frame_ops import decimate_frames, optimize_frames
+from gif2vtf.gif_loader import load_gif_sequence
 from gif2vtf.resize import (
     RESIZE_METHODS,
     resize_frames,
@@ -73,9 +74,24 @@ def _build_parser() -> argparse.ArgumentParser:
     flg.add_argument("--flag", action="append", default=[], metavar="NAME", help="Add a VTFFlags flag (repeatable).")
     flg.add_argument("--no-flag", action="append", default=[], metavar="NAME", help="Remove a preset flag (repeatable).")
 
+    frm = parser.add_argument_group("frames")
+    frm.add_argument("--max-frames", type=int, default=None, help="Keep at most this many frames.")
+    frm.add_argument("--skip", type=int, default=0, help="Skip this many leading frames.")
+    frm.add_argument(
+        "--decimate", type=int, default=None, metavar="N",
+        help="Drop every Nth frame (1-based). N must be at least 2.",
+    )
+    frm.add_argument(
+        "--optimize-frames", action="store_true",
+        help="EXPERIMENTAL: remove duplicate and zero-delay frames.",
+    )
+    frm.add_argument(
+        "--optimize-fuzz", type=int, default=0, metavar="N",
+        help="Max per-channel RGBA difference for duplicate detection (default: 0 = exact). "
+        "Only valid with --optimize-frames.",
+    )
+
     other = parser.add_argument_group("other")
-    other.add_argument("--max-frames", type=int, default=None, help="Keep at most this many frames.")
-    other.add_argument("--skip", type=int, default=0, help="Skip this many leading frames.")
     other.add_argument(
         "--version", dest="vtf_version", default="7.5",
         help="VTF version to write (7.2-7.5, default: %(default)s).",
@@ -126,7 +142,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         version = _parse_version(args.vtf_version)
 
-        frames = load_gif_frames(args.input, skip=args.skip, max_frames=args.max_frames)
+        if args.optimize_fuzz and not args.optimize_frames:
+            raise ValueError("--optimize-fuzz requires --optimize-frames.")
+        if args.optimize_fuzz < 0:
+            raise ValueError("--optimize-fuzz must not be negative.")
+
+        sequence = load_gif_sequence(args.input, skip=args.skip, max_frames=args.max_frames)
+        decoded_count = len(sequence)
+
+        optimize_stats = None
+        if args.optimize_frames:
+            print("gif2vtf: warning: --optimize-frames is experimental", file=sys.stderr)
+            sequence, optimize_stats = optimize_frames(sequence, fuzz=args.optimize_fuzz)
+        optimized_count = len(sequence)
+
+        frames = sequence.frames
+        if args.decimate is not None:
+            frames = decimate_frames(frames, args.decimate)
+        decimated_count = len(frames)
 
         resize_enabled = bool(opt("resize"))
         # Explicit width/height force the 'set' method.
@@ -205,7 +238,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.verbose:
         print(f"Input:       {args.input}")
         print(f"Output:      {output}")
-        print(f"Frames:      {result.frame_count}")
+        stages = f"Frames:      {result.frame_count}"
+        if args.optimize_frames or args.decimate is not None:
+            parts = [f"decoded {decoded_count}"]
+            if args.optimize_frames:
+                parts.append(f"optimized {optimized_count}")
+            if args.decimate is not None:
+                parts.append(f"decimated {decimated_count}")
+            stages += f" ({' -> '.join(parts)})"
+        print(stages)
+        if optimize_stats is not None:
+            print(
+                f"Optimized:   removed {optimize_stats.zero_delay_removed} zero-delay, "
+                f"{optimize_stats.duplicates_removed} duplicate frame(s)"
+            )
         print(f"Dimensions:  {result.width}x{result.height}")
         print(f"Format:      {result.image_format.name} ({'alpha' if has_alpha else 'no alpha'})")
         print(f"Mipmaps:     {'yes' if mipmaps else 'no'} ({result.mipmap_count} level(s))")
