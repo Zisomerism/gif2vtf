@@ -2,16 +2,21 @@
 
 Convert animated GIFs into animated [Valve Texture Format](https://developer.valvesoftware.com/wiki/Valve_Texture_Format) (`.vtf`) files from the command line.
 
-This automates the manual workflow described in the [Steam "animated sprays" guide](https://steamcommunity.com/sharedfiles/filedetails/?id=1288408087): split a GIF into frames, normalise their size, and pack them into a single multi-frame VTF. Instead of GIMP plus VTFEdit, you run one command.
+There are some basic options for trimming and decimating GIFs, basic GIF optimization, and applying PNG or TGA images as overlays to the GIFs.
+
+This automates the manual workflow described in this [Steam Team Fortress 2 animated sprays guide](https://steamcommunity.com/sharedfiles/filedetails/?id=1288408087): split a GIF into frames, normalise their size, and pack them into a single multi-frame VTF. Instead of GIMP plus VTFEdit, you run one command.
+
 
 ## How it works
 
 ```
-GIF -> decode + coalesce frames -> resize/clamp -> detect alpha
-    -> pick image format -> write multi-frame VTF (srctools)
+GIF -> decode + coalesce frames -> [optional overlay] -> resize/clamp
+    -> [optional overlay] -> detect alpha -> pick image format
+    -> write multi-frame VTF (srctools)
 ```
 
-Frames are decoded with Pillow and fully composited (this undoes GIF "optimization", equivalent to the guide's GIMP *Unoptimize* step). They are resized to a power-of-two size, then written as a single animated VTF using [srctools](https://github.com/TeamSpen210/srctools).
+Frames are decoded with Pillow and fully composited (this undoes GIF "optimization", equivalent to the guide's GIMP *Unoptimize* step). An optional PNG/TGA overlay can be composited onto every frame before or after resize. Frames are resized to a power-of-two size, then written as a single animated VTF using [srctools](https://github.com/TeamSpen210/srctools).
+
 
 ## Installation
 
@@ -34,7 +39,6 @@ pip install .[dev]
 pytest
 ```
 
-> **Compressed formats need the compiled srctools build.** DXT1/DXT3/DXT5 and ATI2N compression is implemented in srctools' optional Cython extension (libsquish). The standard `pip install srctools` wheel includes it. If your build lacks it, those formats raise an error on save; use an uncompressed format such as `RGBA8888` or `BGRA8888` instead.
 
 ## Usage
 
@@ -79,6 +83,13 @@ A preset only supplies defaults; any explicit flag overrides it.
 --decimate N             Drop every Nth frame (1-based); N must be >= 2
 --optimize-frames        EXPERIMENTAL: remove duplicate and zero-delay frames
 --optimize-fuzz N        Max per-channel RGBA difference for duplicate detection
+
+--overlay PATH           PNG/TGA image composited onto every frame
+--overlay-x N            Horizontal overlay offset in pixels (default: 0)
+--overlay-y N            Vertical overlay offset in pixels (default: 0)
+--overlay-center         Center overlay on each frame, then apply x/y nudge
+--overlay-after-resize   Apply overlay after resize (default: before resize)
+
 --version 7.5            VTF version (7.2-7.5)
 --strict-size            Fail instead of warning when over the spray limit
 -v / --verbose           Print conversion details
@@ -92,6 +103,25 @@ Sprays have a tight size budget, so trimming frames is often necessary.
 - `--optimize-frames` is experimental. It removes whole frames that add nothing to the visible animation: zero-delay intermediate frames and runs of consecutive identical frames (the spirit of ImageMagick's [`RemoveZero` and `RemoveDups`](https://usage.imagemagick.org/anim_opt/#frame_opt) layer methods). Duplicate detection is exact by default; raise the tolerance with `--optimize-fuzz N`, where `N` is the maximum allowed per-channel difference. This does not perform GIF sub-frame or disposal optimization, which is irrelevant to VTF because every VTF frame stores a full image.
 
 Optimization runs before decimation, and both run after `--skip` / `--max-frames`.
+
+### Overlay
+
+Composite a static PNG or TGA (with alpha) on top of every frame. By default the overlay is applied **before resize**, so it should match the source GIF dimensions and will scale with the animation. Use `--overlay-after-resize` when the overlay is already sized for the final VTF output (e.g. a 128x128 logo on a 128x128 spray).
+
+```bash
+# Full-size overlay that scales with the GIF (default)
+gif2vtf anim.gif --overlay watermark.png
+
+# Centered logo on a 128x128 spray (overlay must be 128x128)
+gif2vtf anim.gif -o spray.vtf --preset spray --width 128 --height 128 \
+  --overlay logo.png --overlay-center --overlay-after-resize
+
+# Watermark at a fixed offset in final pixel space
+gif2vtf anim.gif -o out.vtf --overlay stamp.png --overlay-x 8 --overlay-y 8 \
+  --overlay-after-resize
+```
+
+Positioning defaults to the top-left corner (`--overlay-x 0 --overlay-y 0`). With `--overlay-center`, the overlay is centered first and `--overlay-x` / `--overlay-y` nudge it from there.
 
 Supported format names: `DXT1`, `DXT3`, `DXT5`, `DXT1_ONEBITALPHA`, `BGR888`, `RGB888`, `BGRA8888`, `RGBA8888`, `BGR565`, `RGB565`, `ATI2N`.
 

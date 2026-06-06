@@ -12,6 +12,7 @@ from srctools.vtf import VTFFlags
 from gif2vtf import formats, presets
 from gif2vtf.frame_ops import decimate_frames, optimize_frames
 from gif2vtf.gif_loader import load_gif_sequence
+from gif2vtf.overlay import apply_overlay, load_overlay
 from gif2vtf.resize import (
     RESIZE_METHODS,
     resize_frames,
@@ -91,6 +92,29 @@ def _build_parser() -> argparse.ArgumentParser:
         "Only valid with --optimize-frames.",
     )
 
+    ovr = parser.add_argument_group("overlay")
+    ovr.add_argument(
+        "--overlay", type=Path, default=None,
+        help="PNG/TGA image composited onto every frame.",
+    )
+    ovr.add_argument(
+        "--overlay-x", type=int, default=0,
+        help="Horizontal overlay offset in pixels (default: 0).",
+    )
+    ovr.add_argument(
+        "--overlay-y", type=int, default=0,
+        help="Vertical overlay offset in pixels (default: 0).",
+    )
+    ovr.add_argument(
+        "--overlay-center", action="store_true",
+        help="Center the overlay on each frame, then apply overlay-x/y as a nudge.",
+    )
+    ovr.add_argument(
+        "--overlay-after-resize", action="store_true",
+        help="Apply overlay after resize, in final VTF pixel space "
+        "(default: before resize, overlay scales with frames).",
+    )
+
     other = parser.add_argument_group("other")
     other.add_argument(
         "--version", dest="vtf_version", default="7.5",
@@ -147,6 +171,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.optimize_fuzz < 0:
             raise ValueError("--optimize-fuzz must not be negative.")
 
+        overlay_options = (
+            args.overlay_x != 0
+            or args.overlay_y != 0
+            or args.overlay_center
+            or args.overlay_after_resize
+        )
+        if args.overlay is None and overlay_options:
+            raise ValueError("--overlay is required when using overlay options.")
+
+        overlay_image = load_overlay(args.overlay) if args.overlay is not None else None
+
         sequence = load_gif_sequence(args.input, skip=args.skip, max_frames=args.max_frames)
         decoded_count = len(sequence)
 
@@ -160,6 +195,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.decimate is not None:
             frames = decimate_frames(frames, args.decimate)
         decimated_count = len(frames)
+
+        def _apply_overlay_to_frames(frame_list: list) -> list:
+            assert overlay_image is not None
+            return apply_overlay(
+                frame_list,
+                overlay_image,
+                x=args.overlay_x,
+                y=args.overlay_y,
+                center=args.overlay_center,
+            )
+
+        if overlay_image is not None and not args.overlay_after_resize:
+            frames = _apply_overlay_to_frames(frames)
 
         resize_enabled = bool(opt("resize"))
         # Explicit width/height force the 'set' method.
@@ -187,6 +235,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "Frames have differing sizes; enable resizing to normalise them."
                 )
             width, height = frames[0].size
+
+        if overlay_image is not None and args.overlay_after_resize:
+            frames = _apply_overlay_to_frames(frames)
 
         validate_dimensions(width, height)
 
@@ -252,6 +303,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 f"Optimized:   removed {optimize_stats.zero_delay_removed} zero-delay, "
                 f"{optimize_stats.duplicates_removed} duplicate frame(s)"
             )
+        if overlay_image is not None:
+            timing = "after resize" if args.overlay_after_resize else "before resize"
+            position = "centered" if args.overlay_center else "top-left"
+            print(f"Overlay:     {args.overlay} ({timing}, {position}, x={args.overlay_x}, y={args.overlay_y})")
         print(f"Dimensions:  {result.width}x{result.height}")
         print(f"Format:      {result.image_format.name} ({'alpha' if has_alpha else 'no alpha'})")
         print(f"Mipmaps:     {'yes' if mipmaps else 'no'} ({result.mipmap_count} level(s))")

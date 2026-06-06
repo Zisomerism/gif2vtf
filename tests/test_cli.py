@@ -1,7 +1,7 @@
 import io
 
 from PIL import Image
-from srctools.vtf import VTF, VTFFlags
+from srctools.vtf import VTF, VTFFlags, ImageFormats
 
 from gif2vtf.cli import main
 
@@ -107,3 +107,57 @@ def test_cli_strict_size_fails_when_over_limit(tmp_path, capsys):
     assert rc == 1
     assert not out.exists()
     assert "spray limit" in capsys.readouterr().err
+
+
+def test_cli_overlay_applies_before_resize_by_default(tmp_path):
+    gif = tmp_path / "anim.gif"
+    overlay = tmp_path / "overlay.png"
+    out = tmp_path / "anim.vtf"
+    _write_gif(gif, [(255, 0, 0), (0, 255, 0)], size=(64, 64))
+    Image.new("RGBA", (64, 64), (0, 0, 255, 128)).save(overlay)
+
+    rc = main([
+        str(gif), "-o", str(out),
+        "--format", "RGBA8888",
+        "--alpha-format", "RGBA8888",
+        "--width", "64", "--height", "64",
+        "--overlay", str(overlay),
+    ])
+    assert rc == 0
+
+    parsed = VTF.read(io.BytesIO(out.read_bytes()))
+    assert parsed.frame_count == 2
+    assert parsed.format is ImageFormats.RGBA8888
+    assert VTFFlags.EIGHTBITALPHA in parsed.flags
+
+
+def test_cli_overlay_applies_after_resize(tmp_path):
+    gif = tmp_path / "anim.gif"
+    overlay = tmp_path / "overlay.png"
+    out = tmp_path / "anim.vtf"
+    _write_gif(gif, [(255, 0, 0), (0, 255, 0)], size=(64, 64))
+    Image.new("RGBA", (64, 64), (0, 0, 255, 128)).save(overlay)
+
+    rc = main([
+        str(gif), "-o", str(out),
+        "--format", "RGBA8888",
+        "--alpha-format", "RGBA8888",
+        "--width", "64", "--height", "64",
+        "--overlay", str(overlay),
+        "--overlay-after-resize",
+    ])
+    assert rc == 0
+
+    parsed = VTF.read(io.BytesIO(out.read_bytes()))
+    assert parsed.frame_count == 2
+
+
+def test_cli_overlay_option_requires_overlay_path(tmp_path, capsys):
+    gif = tmp_path / "anim.gif"
+    out = tmp_path / "anim.vtf"
+    _write_gif(gif, [(255, 0, 0)])
+
+    rc = main([str(gif), "-o", str(out), "--format", "RGBA8888", "--overlay-x", "4"])
+    assert rc == 1
+    assert not out.exists()
+    assert "--overlay is required" in capsys.readouterr().err
