@@ -1,22 +1,45 @@
 [build-system]
-requires = ["setuptools >= 61.0"]
+requires = ["setuptools >= 77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "gif2vtf"
-version = "0.1.0"
+version = "1.0.0"
 description = "Convert animated GIFs into animated Valve Texture Format (.vtf) files."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Zisomerism", email = "29962815+Zisomerism@users.noreply.github.com" },
+]
 keywords = ["vtf", "gif", "source engine", "valve", "spray", "texture"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+]
 dependencies = [
     "srctools >= 2.4",
     "Pillow >= 9.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest >= 7.0"]
+dev = ["pytest >= 7.0", "build >= 1.0", "twine >= 5.0"]
+
+[project.urls]
+Homepage = "https://github.com/Zisomerism/gif2vtf"
+Repository = "https://github.com/Zisomerism/gif2vtf"
+Issues = "https://github.com/Zisomerism/gif2vtf/issues"
 
 [project.scripts]
 gif2vtf = "gif2vtf.cli:main"
