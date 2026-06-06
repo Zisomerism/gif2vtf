@@ -103,37 +103,6 @@ Supported format names: `DXT1`, `DXT3`, `DXT5`, `DXT1_ONEBITALPHA`, `BGR888`, `R
 - **Mipmap filters** are limited to `nearest` and `bilinear` (all srctools supports).
 - This tool outputs `.vtf` only; it does not generate a companion `.vmt` material file.
 
-## Releasing (maintainers)
-
-### One-time PyPI trusted publishing setup
-
-GitHub Actions publishes to PyPI using [trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC). No API token is stored in GitHub secrets.
-
-1. **PyPI** — open [Account settings → Publishing](https://pypi.org/manage/account/publishing/) (or the project page after the first upload) and add a trusted publisher:
-   - PyPI project name: `gif2vtf`
-   - Owner: `Zisomerism`
-   - Repository name: `gif2vtf`
-   - Workflow name: `publish.yml`
-   - Environment name: `pypi`
-2. **GitHub** — in this repository go to **Settings → Environments**, create an environment named `pypi` (optionally restrict it to the `main` branch and require approval for production releases).
-
-### Publish a release
-
-1. Bump the version in [`pyproject.toml`](pyproject.toml), [`src/gif2vtf/__init__.py`](src/gif2vtf/__init__.py), and add a [`CHANGELOG.md`](CHANGELOG.md) entry.
-2. Commit, push, and tag (e.g. `v1.0.0`).
-3. Create a [GitHub Release](https://github.com/Zisomerism/gif2vtf/releases/new) from that tag. Publishing the release triggers [`.github/workflows/publish.yml`](.github/workflows/publish.yml), which builds the sdist/wheel and uploads them to PyPI.
-
-### Manual upload (fallback)
-
-```bash
-pip install build twine
-python -m build
-twine check dist/*
-twine upload dist/* --username __token__ --password pypi-...
-```
-
 ## License
 
 This project is licensed under the GNU General Public License, version 3 or later (GPL-3.0-or-later). See [LICENSE](LICENSE) for the full text.
-
-Copyright (C) 2026 Zisomerism.
