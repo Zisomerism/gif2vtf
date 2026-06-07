@@ -2,29 +2,19 @@
 
 Convert animated GIFs into animated [Valve Texture Format](https://developer.valvesoftware.com/wiki/Valve_Texture_Format) (`.vtf`) files from the command line.
 
-There are some basic options for trimming and decimating GIFs, basic GIF optimization, and applying PNG or TGA images as overlays to the GIFs.
-
 This automates the manual workflow described in this [Steam Team Fortress 2 animated sprays guide](https://steamcommunity.com/sharedfiles/filedetails/?id=1288408087): split a GIF into frames, normalise their size, and pack them into a single multi-frame VTF. Instead of GIMP plus VTFEdit, you run one command.
 
-
-## How it works
-
-```
-GIF -> decode + coalesce frames -> [optional overlay] -> resize/clamp
-    -> [optional overlay] -> detect alpha -> pick image format
-    -> write multi-frame VTF (srctools)
-```
-
-Frames are decoded with Pillow and fully composited (this undoes GIF "optimization", equivalent to the guide's GIMP *Unoptimize* step). An optional PNG/TGA overlay can be composited onto every frame before or after resize. Frames are resized to a power-of-two size, then written as a single animated VTF using [srctools](https://github.com/TeamSpen210/srctools).
+There are some basic options for trimming and decimating GIFs, basic GIF optimization, and applying PNG or TGA images as overlays to the GIFs.
 
 
 ## Installation
+
+gif2vtf is on pypi, you can install it from pypi using:
 
 ```bash
 pip install gif2vtf
 ```
 
-This installs the `gif2vtf` command. Dependencies are `srctools` and `Pillow`.
 
 To install from a source checkout instead:
 
